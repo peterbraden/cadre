@@ -1,5 +1,4 @@
 /// Utilities for rendering to a webgl canvas element
-use web_sys::console;
 use js_sys;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
@@ -9,11 +8,11 @@ pub fn create_webgl_pane(width: u32, height: u32) -> Result<WebGl2RenderingConte
     let body = document.body().expect("Document needs body");
     let canvas = document.create_element("canvas").expect("Can't create canvas");
     canvas.set_id("webgl");
-    body.append_with_node_1(&canvas);
+    body.append_with_node_1(&canvas).expect("could not append canvas");
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().expect("Couldn't convert to HtmlCanvas");
-    canvas.style().set_property("width", &(width.to_string() + "px"));
-    canvas.style().set_property("height", &(height.to_string() + "px"));
-    canvas.style().set_property("background-color", "#222");
+    let _ = canvas.style().set_property("width", &(width.to_string() + "px"));
+    let _ = canvas.style().set_property("height", &(height.to_string() + "px"));
+    let _ = canvas.style().set_property("background-color", "#222");
     let context = canvas.get_context("webgl2").unwrap().expect("Couldn't get webgl2 context").dyn_into::<WebGl2RenderingContext>().expect("Couldn't cast");
     return Ok(context);
 }
