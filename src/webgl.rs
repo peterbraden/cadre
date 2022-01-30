@@ -121,3 +121,48 @@ pub fn set_uniform1f(context: &WebGl2RenderingContext, program: &WebGlProgram, n
         context.uniform1f(Some(&location.unwrap()), value);
     }
 }
+
+pub fn get_basic_vert_shader(context: &WebGl2RenderingContext) -> WebGlShader {
+    compile_shader(
+        context,
+        WebGl2RenderingContext::VERTEX_SHADER,
+        r##"#version 300 es
+ 
+        in vec4 position;
+
+        void main() {
+            gl_Position = position;
+        }
+        "##,
+    ).expect("couldn't create shader")
+}
+
+pub fn get_basic_frag_shader(context: &WebGl2RenderingContext) -> WebGlShader {
+    compile_shader(
+        &context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        r##"#version 300 es
+    
+        precision highp float;
+        out vec4 outColor;
+		uniform float width;
+		uniform float height;
+        
+        void main() {
+			vec2 u_resolution = vec2(width, height);
+			vec2 st = gl_FragCoord.xy / u_resolution;
+            outColor = vec4(st.xy, 1, 1.0);
+        }
+        "##,
+    ).expect("couldn't create shader")
+}
+
+pub fn get_basic_webgl_program(context: &WebGl2RenderingContext) -> WebGlProgram {
+	let vert_shader = get_basic_vert_shader(&context);
+    let frag_shader = get_basic_frag_shader(&context);
+
+    let program = link_program(&context, &vert_shader, &frag_shader).expect("couldn't link program");
+    context.use_program(Some(&program));
+
+    return program;
+}
