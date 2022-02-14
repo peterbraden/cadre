@@ -1,7 +1,12 @@
 /// Utilities for rendering to a webgl canvas element
 use js_sys;
+use web_sys::console;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+
+fn console_log(s: String){
+	console::log_1(&s.into());
+}
 
 pub fn create_webgl_pane(width: u32, height: u32) -> Result<WebGl2RenderingContext, String>{
     let document = web_sys::window().unwrap().document().unwrap();
@@ -79,6 +84,7 @@ pub fn draw_triangles(
     context: &WebGl2RenderingContext,
     program: &WebGlProgram,
     vertices: &[f32],
+    indices: &[usize],
     name: &str
 ) {
     let vao = context
@@ -121,6 +127,22 @@ pub fn set_uniform1f(context: &WebGl2RenderingContext, program: &WebGlProgram, n
         context.uniform1f(Some(&location.unwrap()), value);
     }
 }
+
+pub fn set_uniform_mat4f(
+    context: &WebGl2RenderingContext,
+    program: &WebGlProgram,
+    name: &str,
+    value: &[f32]
+){
+    let location = context.get_uniform_location(program, name);
+    if location.is_some() {
+        context.uniform_matrix4fv_with_f32_array(Some(&location.unwrap()), false, value);
+    } else {
+        console_log(format!("missing location for {}", name));
+    }
+}
+
+
 
 pub fn get_basic_vert_shader(context: &WebGl2RenderingContext) -> WebGlShader {
     compile_shader(
