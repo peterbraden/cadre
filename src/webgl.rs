@@ -84,9 +84,11 @@ pub fn draw_triangles(
     context: &WebGl2RenderingContext,
     program: &WebGlProgram,
     vertices: &[f32],
-    indices: &[usize],
+    indices: &[u32],
     name: &str
 ) {
+
+	console_log(format!("Rendering {} vertices, {} indices ...", vertices.len(), indices.len()));
     let vao = context
         .create_vertex_array()
         .expect("Could not create vertex array object");
@@ -117,8 +119,26 @@ pub fn draw_triangles(
     context.vertex_attrib_pointer_with_i32(position_attribute_location as u32, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
     context.enable_vertex_attrib_array(position_attribute_location as u32);
 
-    let vert_count = (vertices.len() / 3) as i32;
-    context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, vert_count);
+    
+    let index_buffer = context.create_buffer().expect("Failed to create buffer");
+    context.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, Some(&index_buffer));
+
+    unsafe {
+        let indices_array_buf_view = js_sys::Uint32Array::view(&indices);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            &indices_array_buf_view,
+            WebGl2RenderingContext::STATIC_DRAW,
+        );
+    }
+
+    context.draw_elements_with_i32(
+        WebGl2RenderingContext::TRIANGLES, 
+        (indices.len()) as i32,
+        WebGl2RenderingContext::UNSIGNED_INT,
+        0
+    );
 }
 
 pub fn set_uniform1f(context: &WebGl2RenderingContext, program: &WebGlProgram, name: &str, value: f32) {
