@@ -130,8 +130,11 @@ pub fn get_basic_vert_shader(context: &WebGl2RenderingContext) -> WebGlShader {
  
         in vec4 position;
 
+        uniform mat4 modelView;
+        uniform mat4 projection;
+
         void main() {
-            gl_Position = position;
+            gl_Position = projection * modelView * position;
         }
         "##,
     ).expect("couldn't create shader")
