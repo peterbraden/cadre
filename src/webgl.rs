@@ -2,7 +2,150 @@
 use js_sys;
 use web_sys::console;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+use na::{Vector3, Rotation3};
+
+pub trait WebGlTriangles {
+	// Allows rendering with gl.TRIANGLES
+	fn to_gl_triangles_vertices(&self) -> Vec<f32>;
+	fn to_gl_triangles_indices(&self) -> Vec<u32>;
+    fn to_model_view_mat4(&self) -> [f32; 16];
+}
+
+
+pub struct Cube {
+	xmin : f32,
+	xmax: f32,
+	ymin: f32,
+	ymax: f32,
+	zmin: f32,
+	zmax: f32,
+    model_view: na::Matrix4<f32>
+} 
+
+impl Cube {
+	pub fn new(xmin: f32, ymin: f32, zmin: f32, xmax: f32, ymax: f32, zmax: f32, model_view: na::Matrix4<f32>) -> Self {
+		Cube {xmin, xmax, ymin, ymax, zmin, zmax, model_view}
+	}
+}
+
+impl WebGlTriangles for Cube {
+	fn to_gl_triangles_vertices(&self) -> Vec<f32> {
+		return vec![
+			// Front
+			self.xmin, self.ymin, self.zmax,
+			self.xmax, self.ymin, self.zmax,
+			self.xmax, self.ymax, self.zmax,
+			self.xmin, self.ymax, self.zmax,
+			// Back	
+			self.xmin, self.ymin, self.zmin,
+			self.xmax, self.ymin, self.zmin,
+			self.xmax, self.ymax, self.zmin,
+			self.xmin, self.ymax, self.zmin,
+			// Top
+			self.xmin, self.ymax, self.zmin,
+			self.xmin, self.ymax, self.zmax,
+			self.xmax, self.ymax, self.zmax,
+			self.xmax, self.ymax, self.zmin,
+			// Bottom
+			// Left
+			// Right
+
+		];
+	}
+
+	fn to_gl_triangles_indices(&self) -> Vec<u32> {
+		return vec! [
+			0, 1, 2,      0, 2, 3,    // Front face
+			4, 5, 6,      4, 6, 7,    // Back face
+/*			8, 9, 10,     8, 10, 11,  // Top face
+			12, 13, 14,   12, 14, 15, // Bottom face
+			16, 17, 18,   16, 18, 19, // Right face
+			20, 21, 22,   20, 22, 23  // Left face
+*/
+	  ];
+	}
+
+    fn to_model_view_mat4(&self) -> [f32; 16] {
+        flatten(self.model_view.into())
+    }
+}
+
+
+fn to_mat4(m: &na::Matrix4<f32>) -> [f32; 16] {
+    return flatten(m.clone().into())
+}
+
+// This is annoying
+fn flatten(a: [[f32; 4]; 4]) -> [f32; 16] {
+    unsafe { std::mem::transmute(a) }
+}
+
+
+pub struct RenderContext {
+    ctx: WebGl2RenderingContext,
+    program: WebGlProgram,
+    objects: Vec<Box<dyn WebGlTriangles>>
+    // projection mat4
+}
+
+impl RenderContext {
+    pub fn new(width: u32, height: u32, projection: na::Matrix4<f32>) -> Self {
+        let ctx = create_webgl_pane(width, height).expect("Couldn't create context");
+	    let program = get_basic_webgl_program(&ctx);
+        let objects: Vec<Box<dyn WebGlTriangles>> = Vec::new();
+
+	    set_uniform1f(&ctx, &program, "width", width as f32);
+	    set_uniform1f(&ctx, &program, "height", height as f32);
+
+	    set_uniform_mat4f(&ctx, &program, "projection", &to_mat4(&projection));
+        
+        return RenderContext {
+            ctx,
+            program,
+            objects
+        };
+    }
+    
+    pub fn add_object(&mut self, object: Box<dyn WebGlTriangles>) {
+        let vertices = object.to_gl_triangles_vertices();
+        let indices = object.to_gl_triangles_indices();
+	    add_triangles(&self.ctx, &self.program, &vertices, &indices, "position");
+	    set_uniform_mat4f(&self.ctx, &self.program, "modelView", &object.to_model_view_mat4());
+        self.objects.push(object);
+    }
+
+    pub fn start(self){
+	    request_animation_frame(self);
+    }
+
+    fn draw_objects(&self){
+	    //console_log(format!("Drawing {} objects...", self.objects.len()));
+        for o in &self.objects {
+            let indices = o.to_gl_triangles_indices(); // TODO remove
+	        //console_log(format!("Drawing {} indices...", indices.len()));
+            &self.ctx.draw_elements_with_i32(
+                WebGl2RenderingContext::TRIANGLES, 
+                indices.len() as i32,
+                WebGl2RenderingContext::UNSIGNED_INT,
+                0
+            );
+        }
+    }
+
+    pub fn tick(self, time: f64) {
+        console_log(format!("Tick {}", time));
+        clear(&self.ctx);
+        &self.draw_objects();
+    
+        let axisangle = Vector3::y() * (time*0.002 % std::f64::consts::PI*2. ) as f32;
+        let model_view = Rotation3::new(axisangle).to_homogeneous();
+	    set_uniform_mat4f(&self.ctx, &self.program, "modelView", &to_mat4(&model_view));
+
+        request_animation_frame(self);
+    }
+}
 
 fn console_log(s: String){
 	console::log_1(&s.into());
@@ -20,6 +163,22 @@ pub fn create_webgl_pane(width: u32, height: u32) -> Result<WebGl2RenderingConte
     let _ = canvas.style().set_property("background-color", "#222");
     let context = canvas.get_context("webgl2").unwrap().expect("Couldn't get webgl2 context").dyn_into::<WebGl2RenderingContext>().expect("Couldn't cast");
     return Ok(context);
+}
+
+pub fn get_context() -> WebGl2RenderingContext {
+    let canvas = web_sys::window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .get_element_by_id("webgl")
+                    .expect("Missing webgl element");
+    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().expect("Couldn't convert to HtmlCanvas");
+
+    return canvas.get_context("webgl2")
+                 .unwrap()
+                 .expect("Couldn't get webgl2 context")
+                 .dyn_into::<WebGl2RenderingContext>()
+                 .expect("Couldn't cast");
 }
 
 pub fn compile_shader(
@@ -80,7 +239,7 @@ pub fn clear(context: &WebGl2RenderingContext) {
 /// Quick and simple way of drawing a mesh
 /// - Unindexed vertices (uses WebGL draw_arrays)
 /// - Assume [x, y, z, x, y, z] layout.
-pub fn draw_triangles(
+pub fn add_triangles(
     context: &WebGl2RenderingContext,
     program: &WebGlProgram,
     vertices: &[f32],
@@ -88,7 +247,7 @@ pub fn draw_triangles(
     name: &str
 ) {
 
-	console_log(format!("Rendering {} vertices, {} indices ...", vertices.len(), indices.len()));
+	console_log(format!("Adding {} vertices, {} indices ...", vertices.len(), indices.len()));
     let vao = context
         .create_vertex_array()
         .expect("Could not create vertex array object");
@@ -133,12 +292,6 @@ pub fn draw_triangles(
         );
     }
 
-    context.draw_elements_with_i32(
-        WebGl2RenderingContext::TRIANGLES, 
-        (indices.len()) as i32,
-        WebGl2RenderingContext::UNSIGNED_INT,
-        0
-    );
 }
 
 pub fn set_uniform1f(context: &WebGl2RenderingContext, program: &WebGlProgram, name: &str, value: f32) {
@@ -210,4 +363,14 @@ pub fn get_basic_webgl_program(context: &WebGl2RenderingContext) -> WebGlProgram
     context.use_program(Some(&program));
 
     return program;
+}
+
+pub fn request_animation_frame(rc: RenderContext) {
+    let c = Closure::once_into_js(Box::new(move || {
+        let time =  js_sys::Date::new_0().get_time();
+        rc.tick(time);
+    }) as Box<dyn FnOnce()>);
+    web_sys::window().expect("no global `window` exists")
+        .request_animation_frame(&c.as_ref().unchecked_ref())
+        .expect("should register `requestAnimationFrame` OK");
 }
