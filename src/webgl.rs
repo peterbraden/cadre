@@ -59,7 +59,8 @@ impl WebGlTriangles for Cube {
 		return vec! [
 			0, 1, 2,      0, 2, 3,    // Front face
 			4, 5, 6,      4, 6, 7,    // Back face
-/*			8, 9, 10,     8, 10, 11,  // Top face
+			8, 9, 10,     8, 10, 11,  // Top face
+            /*
 			12, 13, 14,   12, 14, 15, // Bottom face
 			16, 17, 18,   16, 18, 19, // Right face
 			20, 21, 22,   20, 22, 23  // Left face
@@ -125,7 +126,7 @@ impl RenderContext {
         for o in &self.objects {
             let indices = o.to_gl_triangles_indices(); // TODO remove
 	        //console_log(format!("Drawing {} indices...", indices.len()));
-            &self.ctx.draw_elements_with_i32(
+            let _ = &self.ctx.draw_elements_with_i32(
                 WebGl2RenderingContext::TRIANGLES, 
                 indices.len() as i32,
                 WebGl2RenderingContext::UNSIGNED_INT,
@@ -137,9 +138,9 @@ impl RenderContext {
     pub fn tick(self, time: f64) {
         console_log(format!("Tick {}", time));
         clear(&self.ctx);
-        &self.draw_objects();
+        let _ = &self.draw_objects();
     
-        let axisangle = Vector3::y() * (time*0.002 % std::f64::consts::PI*2. ) as f32;
+        let axisangle = Vector3::z() * (time*0.001 % std::f64::consts::PI*2. ) as f32;
         let model_view = Rotation3::new(axisangle).to_homogeneous();
 	    set_uniform_mat4f(&self.ctx, &self.program, "modelView", &to_mat4(&model_view));
 
@@ -163,22 +164,6 @@ pub fn create_webgl_pane(width: u32, height: u32) -> Result<WebGl2RenderingConte
     let _ = canvas.style().set_property("background-color", "#222");
     let context = canvas.get_context("webgl2").unwrap().expect("Couldn't get webgl2 context").dyn_into::<WebGl2RenderingContext>().expect("Couldn't cast");
     return Ok(context);
-}
-
-pub fn get_context() -> WebGl2RenderingContext {
-    let canvas = web_sys::window()
-                    .unwrap()
-                    .document()
-                    .unwrap()
-                    .get_element_by_id("webgl")
-                    .expect("Missing webgl element");
-    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().expect("Couldn't convert to HtmlCanvas");
-
-    return canvas.get_context("webgl2")
-                 .unwrap()
-                 .expect("Couldn't get webgl2 context")
-                 .dyn_into::<WebGl2RenderingContext>()
-                 .expect("Couldn't cast");
 }
 
 pub fn compile_shader(
