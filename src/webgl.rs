@@ -33,43 +33,42 @@ impl Cube {
 impl WebGlTriangles for Cube {
 	fn to_gl_triangles_vertices(&self) -> Vec<f32> {
 		return vec![
-			// Front
-			self.xmin, self.ymin, self.zmax,
-			self.xmax, self.ymin, self.zmax,
-			self.xmax, self.ymax, self.zmax,
-			self.xmin, self.ymax, self.zmax,
-			// Back	
-			self.xmin, self.ymin, self.zmin,
-			self.xmax, self.ymin, self.zmin,
-			self.xmax, self.ymax, self.zmin,
-			self.xmin, self.ymax, self.zmin,
-			// Top
-			self.xmin, self.ymax, self.zmin,
-			self.xmin, self.ymax, self.zmax,
-			self.xmax, self.ymax, self.zmax,
-			self.xmax, self.ymax, self.zmin,
-			// Bottom
-			// Left
-			// Right
-
+			self.xmin, self.ymin, self.zmin, // BLB 0
+			self.xmin, self.ymin, self.zmax, // BLF 1
+			self.xmin, self.ymax, self.zmin, // TLB 2
+			self.xmin, self.ymax, self.zmax, // TLF 3 
+			self.xmax, self.ymin, self.zmin, // BRB 4
+			self.xmax, self.ymin, self.zmax, // BRF 5
+			self.xmax, self.ymax, self.zmin, // TRB 6
+			self.xmax, self.ymax, self.zmax, // TRF 7
 		];
 	}
 
 	fn to_gl_triangles_indices(&self) -> Vec<u32> {
 		return vec! [
-			0, 1, 2,      0, 2, 3,    // Front face
-			4, 5, 6,      4, 6, 7,    // Back face
-			8, 9, 10,     8, 10, 11,  // Top face
-            /*
-			12, 13, 14,   12, 14, 15, // Bottom face
-			16, 17, 18,   16, 18, 19, // Right face
-			20, 21, 22,   20, 22, 23  // Left face
-*/
+			1, 3, 7,      1, 5, 7,    // Front face
+			0, 2, 6,      0, 4, 6,    // Back face
+			2, 3, 7,      2, 6, 7,    // Top face
+			0, 1, 5,      0, 4, 5,    // Bottom face
+			4, 5, 7,      4, 6, 7,    // Right face
+			0, 1, 3,      0, 2, 3     // Left face
 	  ];
 	}
 
+/*
+    fn to_wireframe_indices(&self) -> Vec<u32> {
+		return vec! [
+            0, 1, 5, 4, 0, // Bottom
+            2, 3, 7, 6, 2, // Top + LB
+            3, 1, // LF
+            5, 7, // RF
+            6, 4, // RB
+        ];
+    }
+*/
+
     fn to_model_view_mat4(&self) -> [f32; 16] {
-        flatten(self.model_view.into())
+        to_mat4(&self.model_view)
     }
 }
 
@@ -84,11 +83,25 @@ fn flatten(a: [[f32; 4]; 4]) -> [f32; 16] {
 }
 
 
+pub enum RenderMode {
+    WIREFRAME,
+    SHADE
+}
+
+struct ObjectState {
+    indices_len: usize,
+    indices_offset: usize
+}
+
 pub struct RenderContext {
     ctx: WebGl2RenderingContext,
     program: WebGlProgram,
-    objects: Vec<Box<dyn WebGlTriangles>>
+    objects: Vec<Box<dyn WebGlTriangles>>,
+    // objects: Vec<ObjectState>,
+
     // projection mat4
+    
+    render_mode: RenderMode,
 }
 
 impl RenderContext {
@@ -105,7 +118,8 @@ impl RenderContext {
         return RenderContext {
             ctx,
             program,
-            objects
+            objects,
+            render_mode: RenderMode::WIREFRAME
         };
     }
     
@@ -126,12 +140,27 @@ impl RenderContext {
         for o in &self.objects {
             let indices = o.to_gl_triangles_indices(); // TODO remove
 	        //console_log(format!("Drawing {} indices...", indices.len()));
-            let _ = &self.ctx.draw_elements_with_i32(
-                WebGl2RenderingContext::TRIANGLES, 
-                indices.len() as i32,
-                WebGl2RenderingContext::UNSIGNED_INT,
-                0
-            );
+            match &self.render_mode {
+                RenderMode::SHADE => {
+                    let _ = &self.ctx.draw_elements_with_i32(
+                        WebGl2RenderingContext::TRIANGLES, 
+                        indices.len() as i32,
+                        WebGl2RenderingContext::UNSIGNED_INT,
+                        0
+                    );
+                },
+                RenderMode::WIREFRAME => {
+                    // Every triangle draw loop
+                    for x in (0..indices.len()).step_by(3) {
+                        let _ = &self.ctx.draw_elements_with_i32(
+                            WebGl2RenderingContext::LINE_LOOP, 
+                            3,
+                            WebGl2RenderingContext::UNSIGNED_INT,
+                            x as i32 * 4 // sizeof unsigned int
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -140,7 +169,7 @@ impl RenderContext {
         clear(&self.ctx);
         let _ = &self.draw_objects();
     
-        let axisangle = Vector3::z() * (time*0.001 % std::f64::consts::PI*2. ) as f32;
+        let axisangle = Vector3::y() * (time*0.001 % std::f64::consts::PI*2. ) as f32;
         let model_view = Rotation3::new(axisangle).to_homogeneous();
 	    set_uniform_mat4f(&self.ctx, &self.program, "modelView", &to_mat4(&model_view));
 
