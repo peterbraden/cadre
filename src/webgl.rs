@@ -5,82 +5,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 use na::{Vector3, Rotation3};
-
-pub trait WebGlTriangles {
-	// Allows rendering with gl.TRIANGLES
-	fn to_gl_triangles_vertices(&self) -> Vec<f32>;
-	fn to_gl_triangles_indices(&self) -> Vec<u32>;
-    fn to_model_view_mat4(&self) -> [f32; 16];
-}
-
-
-pub struct Cube {
-	xmin : f32,
-	xmax: f32,
-	ymin: f32,
-	ymax: f32,
-	zmin: f32,
-	zmax: f32,
-    model_view: na::Matrix4<f32>
-} 
-
-impl Cube {
-	pub fn new(xmin: f32, ymin: f32, zmin: f32, xmax: f32, ymax: f32, zmax: f32, model_view: na::Matrix4<f32>) -> Self {
-		Cube {xmin, xmax, ymin, ymax, zmin, zmax, model_view}
-	}
-}
-
-impl WebGlTriangles for Cube {
-	fn to_gl_triangles_vertices(&self) -> Vec<f32> {
-		return vec![
-			self.xmin, self.ymin, self.zmin, // BLB 0
-			self.xmin, self.ymin, self.zmax, // BLF 1
-			self.xmin, self.ymax, self.zmin, // TLB 2
-			self.xmin, self.ymax, self.zmax, // TLF 3 
-			self.xmax, self.ymin, self.zmin, // BRB 4
-			self.xmax, self.ymin, self.zmax, // BRF 5
-			self.xmax, self.ymax, self.zmin, // TRB 6
-			self.xmax, self.ymax, self.zmax, // TRF 7
-		];
-	}
-
-	fn to_gl_triangles_indices(&self) -> Vec<u32> {
-		return vec! [
-			1, 3, 7,      1, 5, 7,    // Front face
-			0, 2, 6,      0, 4, 6,    // Back face
-			2, 3, 7,      2, 6, 7,    // Top face
-			0, 1, 5,      0, 4, 5,    // Bottom face
-			4, 5, 7,      4, 6, 7,    // Right face
-			0, 1, 3,      0, 2, 3     // Left face
-	  ];
-	}
-
-/*
-    fn to_wireframe_indices(&self) -> Vec<u32> {
-		return vec! [
-            0, 1, 5, 4, 0, // Bottom
-            2, 3, 7, 6, 2, // Top + LB
-            3, 1, // LF
-            5, 7, // RF
-            6, 4, // RB
-        ];
-    }
-*/
-
-    fn to_model_view_mat4(&self) -> [f32; 16] {
-        to_mat4(&self.model_view)
-    }
-}
-
-
-fn to_mat4(m: &na::Matrix4<f32>) -> [f32; 16] {
-    return flatten(m.clone().into())
-}
-
-// This is annoying
-fn flatten(a: [[f32; 4]; 4]) -> [f32; 16] {
-    unsafe { std::mem::transmute(a) }
-}
+use crate::mesh;
+use crate::convert::{to_mat4};
 
 
 pub enum RenderMode {
@@ -96,7 +22,7 @@ struct ObjectState {
 pub struct RenderContext {
     ctx: WebGl2RenderingContext,
     program: WebGlProgram,
-    objects: Vec<Box<dyn WebGlTriangles>>,
+    objects: Vec<Box<dyn mesh::WebGlTriangles>>,
     // objects: Vec<ObjectState>,
 
     // projection mat4
@@ -108,7 +34,7 @@ impl RenderContext {
     pub fn new(width: u32, height: u32, projection: na::Matrix4<f32>) -> Self {
         let ctx = create_webgl_pane(width, height).expect("Couldn't create context");
 	    let program = get_basic_webgl_program(&ctx);
-        let objects: Vec<Box<dyn WebGlTriangles>> = Vec::new();
+        let objects: Vec<Box<dyn mesh::WebGlTriangles>> = Vec::new();
 
 	    set_uniform1f(&ctx, &program, "width", width as f32);
 	    set_uniform1f(&ctx, &program, "height", height as f32);
@@ -123,7 +49,7 @@ impl RenderContext {
         };
     }
     
-    pub fn add_object(&mut self, object: Box<dyn WebGlTriangles>) {
+    pub fn add_object(&mut self, object: Box<dyn mesh::WebGlTriangles>) {
         let vertices = object.to_gl_triangles_vertices();
         let indices = object.to_gl_triangles_indices();
 	    add_triangles(&self.ctx, &self.program, &vertices, &indices, "position");
