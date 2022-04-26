@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 mod webgl;
 extern crate nalgebra as na;
 use na::{Vector3, Rotation3};

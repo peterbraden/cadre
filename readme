@@ -1,3 +1,10 @@
 # CADRE
 
 Web native CAD app.
+
+
+```
+cargo install wasm-server-runner
+rustup target add wasm64-unknown-unknown
+cargo run --target=wasm32-unknown-unknown
+```
